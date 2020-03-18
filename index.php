@@ -37,7 +37,7 @@ function call_api($user_id, $access_token, $continuation) {
 }
 
 // main
-$items = [];
+$bookmarks = [];
 $continuation = null;
 while (true) {
     $chunked = call_api($user_id, $access_token, $continuation);
@@ -45,33 +45,65 @@ while (true) {
     // nothing return; exit
     if (!$chunked) {
         var_dump($chunked);
+        echo count($bookmarks);
         break;
     }
 
     // api error
     if ($chunked->errorCode ?? false) {
         var_dump($chunked);
+        echo count($bookmarks);
         exit;
     }
 
     // success request
+    // $items = array_merge($items, $chunked->items);
+    foreach ($chunked->items as $item) {
+        // new bookmark entry
+        $bookmark = [
+            'title' => $item->title,
+            'href' => '',
+            'add_date' => $item->actionTimestamp,
+            'last_modified' => $item->actionTimestamp,
+        ];
+        // href cases
+        if ($item->canonicalUrl ?? false) {
+            $bookmark['href'] = $item->canonicalUrl;
+        }
+        elseif ($item->canonical[0] ?? false) {
+            $bookmark['href'] = $item->canonical[0]->href;
+        }
+        elseif ($item->originId ?? false) {
+            $bookmark['href'] = $item->originId;
+        }
+        elseif ($item->alternate[0] ?? false) {
+            $bookmark['href'] = $item->alternate[0]->href;
+        }
+        else {
+            // new exception
+            var_dump($item);
+            exit;
+        }
+        // add bookmark
+        array_push($bookmarks, $bookmark);
+    }
+
+    // check for pagination
     if ($chunked->continuation ?? false) {
         // prepare for next request
         $continuation = $chunked->continuation;
     }
     else {
+        // var_dump($chunked);
+        // exit;
         // end of the stream
         break;
     }
 
-    // $items = array_merge($items, $chunked->items);
-    foreach ($chunked->items as $item) {
-        array_push($items, $item);
-    }
-
-    // sleep, just in case
+    // sleep, just in case api rate limit
     sleep(5);
 }
+// exit;
 ?>
 <!DOCTYPE NETSCAPE-Bookmark-file-1>
 <!-- This is an automatically generated file.
@@ -82,10 +114,10 @@ while (true) {
 <!-- <H1>Bookmarks Menu</H1> -->
 
 <DL><p>
-    <DT><H3>Feedly (Total: <?php echo count($items) ?>)</H3>
+    <DT><H3>Feedly (Total: <?php echo count($bookmarks) ?>)</H3>
     <DL><p>
-        <?php foreach ($items as $item): ?>
-            <DT><A HREF="<?php echo $item->canonicalUrl ?? $item->canonical[0]->href ?>" ADD_DATE="<?php echo $item->actionTimestamp ?>" LAST_MODIFIED="<?php echo $item->actionTimestamp ?>"><?php echo $item->title ?></A>
+        <?php foreach ($bookmarks as $bookmark): ?>
+            <DT><A HREF="<?php echo $bookmark['href'] ?>" ADD_DATE="<?php echo $bookmark['add_date'] ?>" LAST_MODIFIED="<?php echo $bookmark['last_modified'] ?>"><?php echo $bookmark['title'] ?></A>
         <?php endforeach; ?>
     </DL><p>
 </DL>
